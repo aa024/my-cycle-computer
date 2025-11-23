@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Web Cycle Computer + Route</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 上部ダッシュボード */
+        #dashboard {
+            background-color: #222;
+            color: #fff;
+            padding: 5px 10px;
+            height: 130px;
+            /* 少し高さを確保 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+        }
+
+        .data-row {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            width: 100%;
+        }
+
+        .metric {
+            text-align: center;
+        }
+
+        .value {
+            font-size: 3.5rem;
+            font-weight: bold;
+            font-family: monospace;
+            line-height: 1;
+        }
+
+        .unit {
+            font-size: 1rem;
+            color: #aaa;
+        }
+
+        /* コントロールエリア（GPX読み込みボタンなど） */
+        #controls {
+            margin-top: 5px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        /* ファイル入力のデザイン */
+        input[type="file"] {
+            font-size: 0.8rem;
+            color: #ccc;
+            max-width: 200px;
+        }
+
+        #status {
+            font-size: 0.8rem;
+            color: #ff5555;
+            margin-bottom: 5px;
+            text-align: center;
+        }
+
+        #map {
+            flex-grow: 1;
+            width: 100%;
+            background: #ddd;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="dashboard">
+        <div id="status">GPS待機中...</div>
+
+        <div class="data-row">
+            <div class="metric">
+                <div id="speed" class="value">0.0</div>
+                <div class="unit">km/h</div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <input type="file" id="gpxInput" accept=".gpx">
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        // --- 1. 地図の初期化 ---
+        const map = L.map('map').setView([35.6812, 139.7671], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // レイヤー管理
+        let myMarker = null;
+        // 自分が走った軌跡（赤色）
+        const trackLine = L.polyline([], { color: '#ff0000', weight: 5, opacity: 0.8 }).addTo(map);
+        const trackPath = [];
+        // 事前に読み込んだルート（青色）
+        let plannedRouteLine = null;
+
+        // --- 2. GPXファイルの読み込み処理 ---
+        const gpxInput = document.getElementById('gpxInput');
+
+        gpxInput.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const text = e.target.result;
+                parseGPX(text);
+            };
+            reader.readAsText(file);
+        });
+
+        function parseGPX(gpxText) {
+            // 既存のルートがあれば削除
+            if (plannedRouteLine) {
+                map.removeLayer(plannedRouteLine);
+            }
+
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(gpxText, "text/xml");
+            const trkpts = xmlDoc.getElementsByTagName("trkpt");
+            const routeCoords = [];
+
+            for (let i = 0; i < trkpts.length; i++) {
+                const lat = parseFloat(trkpts[i].getAttribute("lat"));
+                const lon = parseFloat(trkpts[i].getAttribute("lon"));
+                routeCoords.push([lat, lon]);
+            }
+
+            if (routeCoords.length > 0) {
+                // 青色でルートを描画
+                plannedRouteLine = L.polyline(routeCoords, {
+                    color: '#3388ff', // 青
+                    weight: 6,
+                    opacity: 0.6      // 少し透けさせる
+                }).addTo(map);
+
+                // ルート全体が見えるようにズーム
+                map.fitBounds(plannedRouteLine.getBounds());
+                alert("ルートを読み込みました！");
+            } else {
+                alert("有効なルートデータが見つかりませんでした。");
+            }
+        }
+
+
+        // --- 3. GPS処理 (基本機能) ---
+        const statusEl = document.getElementById('status');
+        const speedEl = document.getElementById('speed');
+        const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+
+        function success(pos) {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const accuracy = pos.coords.accuracy;
+            let speedKmh = (pos.coords.speed || 0) * 3.6;
+            if (speedKmh < 0) speedKmh = 0;
+
+            speedEl.textContent = speedKmh.toFixed(1);
+            statusEl.textContent = `受信中 (精度: ${Math.round(accuracy)}m)`;
+            statusEl.style.color = '#55ff55';
+
+            const currentPos = [lat, lng];
+
+            if (!myMarker) {
+                myMarker = L.marker(currentPos).addTo(map);
+            } else {
+                myMarker.setLatLng(currentPos);
+            }
+
+            // 地図の中心追従 (手動で地図を動かしている時は追従しないロジックを入れるとより便利ですが、今回は簡易的に常に追従)
+            // ※ルート確認などで地図を動かしたい場合はここをコメントアウトすると良いです
+            map.panTo(currentPos);
+
+            trackPath.push(currentPos);
+            trackLine.setLatLngs(trackPath);
+        }
+
+        function error(err) {
+            statusEl.textContent = "GPSエラー: " + err.message;
+        }
+
+        if (navigator.geolocation) {
+            navigator.geolocation.watchPosition(success, error, geoOptions);
+        }
+
+        // --- 4. Wake Lock (スリープ防止) ---
+        let wakeLock = null;
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) { console.error(err); }
+        }
+        document.addEventListener('click', requestWakeLock);
+        requestWakeLock();
+
+    </script>
+</body>
+
+</html>
