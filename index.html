@@ -1,45 +1,93 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cycle Comp Pro</title>
-    
+    <title>Cycle Comp Pro v5</title>
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
-        body { margin: 0; padding: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        /* ダッシュボードエリア */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100dvh;
+            overflow: hidden;
+        }
+
         #dashboard {
             background-color: #222;
             color: #fff;
-            padding: 10px;
-            /* height: 140px; */
+            padding: 10px 10px 15px 10px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            gap: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
             z-index: 1000;
+            flex-shrink: 0;
         }
 
-        /* 速度表示 */
-        .metric-container {
+        /* 速度表示エリア */
+        .metric-main {
             display: flex;
             justify-content: center;
             align-items: baseline;
         }
-        .value { font-size: 3.5rem; font-weight: bold; font-family: monospace; line-height: 1; }
-        .unit { font-size: 1rem; color: #aaa; margin-left: 5px;}
 
-        /* コントロールボタン群 */
+        .speed-val {
+            font-size: 3.5rem;
+            font-weight: bold;
+            font-family: monospace;
+            line-height: 1;
+        }
+
+        .speed-unit {
+            font-size: 1rem;
+            color: #aaa;
+            margin-left: 5px;
+        }
+
+        /* 追加: 距離情報のサブ表示エリア */
+        .metric-sub {
+            display: flex;
+            justify-content: space-around;
+            background: #333;
+            padding: 5px;
+            border-radius: 6px;
+            margin-bottom: 5px;
+        }
+
+        .sub-item {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #ccc;
+        }
+
+        .sub-val {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #fff;
+            font-family: monospace;
+        }
+
+        #status {
+            font-size: 0.7rem;
+            color: #888;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
         .controls {
             display: flex;
             justify-content: space-between;
             gap: 10px;
         }
-        
+
         button {
             flex: 1;
             padding: 12px;
@@ -52,10 +100,14 @@
             transition: background-color 0.2s;
         }
 
-        #btn-record { background-color: #007bff; } /* 青色 (開始前) */
-        #btn-record.recording { background-color: #dc3545; } /* 赤色 (記録中) */
+        #btn-record {
+            background-color: #007bff;
+        }
 
-        /* GPX入力は少し控えめに */
+        #btn-record.recording {
+            background-color: #dc3545;
+        }
+
         .file-input-wrapper {
             flex: 1;
             background: #444;
@@ -66,25 +118,33 @@
             position: relative;
             overflow: hidden;
         }
+
         .file-input-wrapper input {
             opacity: 0;
             position: absolute;
-            width: 100%; height: 100%;
+            width: 100%;
+            height: 100%;
             cursor: pointer;
         }
-        .file-input-label { font-size: 0.9rem; color: #ccc; pointer-events: none; }
 
-        #status { font-size: 0.75rem; color: #aaa; text-align: center; margin-top: -5px; }
+        .file-input-label {
+            font-size: 0.9rem;
+            color: #ccc;
+            pointer-events: none;
+        }
 
-        /* 地図エリア */
-        #map { flex-grow: 1; width: 100%; background: #ddd; position: relative; }
-
-        /* 現在地へ戻るボタン (地図上にフロート表示) */
-        #btn-center {
+        #map {
+            flex-grow: 1;
+            width: 100%;
+            background: #ddd;
             position: relative;
-            bottom: 0px;
-            right: 0px;
-            z-index: 999; /* Leafletの上に表示 */
+        }
+
+        #btn-center {
+            position: absolute;
+            bottom: calc(30px + env(safe-area-inset-bottom));
+            right: 20px;
+            z-index: 999;
             width: 50px;
             height: 50px;
             border-radius: 50%;
@@ -95,25 +155,39 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
             cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
         }
-        #btn-center:active { background-color: #eee; }
 
+        #btn-center:active {
+            background-color: #eee;
+            transform: scale(0.95);
+        }
     </style>
 </head>
+
 <body>
 
     <div id="dashboard">
-        <div class="metric-container">
-            <div id="speed" class="value">0.0</div>
-            <div class="unit">km/h</div>
+        <div class="metric-main">
+            <div id="speed" class="speed-val">0.0</div>
+            <div class="speed-unit">km/h</div>
         </div>
+
+        <div class="metric-sub">
+            <div class="sub-item">
+                Dst: <span id="dist-trip" class="sub-val">0.00</span> km
+            </div>
+            <div class="sub-item">
+                Route: <span id="dist-route" class="sub-val">--</span> km
+            </div>
+        </div>
+
         <div id="status">GPS待機中...</div>
 
         <div class="controls">
             <button id="btn-record">計測開始</button>
-            
             <div class="file-input-wrapper">
                 <span class="file-input-label">GPX読込</span>
                 <input type="file" id="gpxInput" accept=".gpx">
@@ -127,81 +201,80 @@
 
     <script>
         // --- 変数定義 ---
-        let isRecording = false;    // 記録中かどうか
-        let isAutoCentering = true; // 現在地を自動追従するかどうか
-        let currentPos = null;      // 最新の現在地座標
-        const trackPath = [];       // 軌跡データ配列
+        let isRecording = false;
+        let isAutoCentering = true;
+        let currentPos = null;      // [lat, lng]
+        let prevPos = null;         // 距離計算用、前回の座標
+        let totalDistance = 0;      // 走行距離(km)
+
+        const trackPath = [];
 
         // --- DOM要素 ---
         const speedEl = document.getElementById('speed');
+        const distTripEl = document.getElementById('dist-trip');
+        const distRouteEl = document.getElementById('dist-route');
         const statusEl = document.getElementById('status');
         const btnRecord = document.getElementById('btn-record');
         const btnCenter = document.getElementById('btn-center');
         const gpxInput = document.getElementById('gpxInput');
 
-        // --- 1. 地図初期化 ---
+        // --- 地図初期化 ---
         const map = L.map('map', { zoomControl: false }).setView([35.6812, 139.7671], 15);
-        L.control.zoom({ position: 'topright' }).addTo(map); // ズームボタン位置調整
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OSM'
-        }).addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OSM' }).addTo(map);
 
         let myMarker = null;
-        const trackLine = L.polyline([], {color: '#ff0000', weight: 5, opacity: 0.8}).addTo(map);
+        const trackLine = L.polyline([], { color: '#ff0000', weight: 5, opacity: 0.8 }).addTo(map);
         let plannedRouteLine = null;
 
-        // --- 2. ボタン操作ロジック ---
+        // --- 距離計算関数 (Haversine formula) ---
+        // 2点間の距離(km)を計算
+        function getDistanceKm(lat1, lon1, lat2, lon2) {
+            const R = 6371; // 地球の半径(km)
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
 
-        // (A) 計測開始・終了ボタン
+        // --- ボタン操作 ---
         btnRecord.addEventListener('click', () => {
             if (!isRecording) {
-                // 開始処理
-                const confirmStart = trackPath.length > 0 ? confirm("新しい記録を開始しますか？(前の軌跡は消えます)") : true;
+                // 開始
+                const confirmStart = trackPath.length > 0 ? confirm("新しい記録を開始しますか？") : true;
                 if (!confirmStart) return;
 
                 isRecording = true;
-                
-                // 軌跡リセット
                 trackPath.length = 0;
                 trackLine.setLatLngs([]);
-                
-                // UI変更
+
+                // 距離リセット
+                totalDistance = 0;
+                prevPos = null; // 前回の位置もリセット
+                distTripEl.textContent = "0.00";
+
                 btnRecord.textContent = "計測終了";
-                btnRecord.classList.add('recording'); // 赤くする
-                
-                // 自動追従をONにして現在地へ
+                btnRecord.classList.add('recording');
                 isAutoCentering = true;
                 if (currentPos) map.panTo(currentPos);
-
             } else {
-                // 終了処理
+                // 終了
                 isRecording = false;
-                
-                // UI変更
                 btnRecord.textContent = "計測開始";
-                btnRecord.classList.remove('recording'); // 青に戻す
+                btnRecord.classList.remove('recording');
             }
         });
 
-        // (B) 現在地へ戻るボタン
         btnCenter.addEventListener('click', () => {
             isAutoCentering = true;
-            if (currentPos) {
-                map.panTo(currentPos);
-                // 必要ならズームレベルも戻す
-                // map.setView(currentPos, 15); 
-            }
+            if (currentPos) map.panTo(currentPos);
         });
 
-        // (C) 地図を手動で動かした時の検知
-        // 'dragstart' はユーザーが指でドラッグし始めた時に発火
-        map.on('dragstart', () => {
-            isAutoCentering = false; // 自動追従を解除
-        });
+        map.on('dragstart', () => { isAutoCentering = false; });
 
-
-        // --- 3. GPS処理 ---
+        // --- GPS更新処理 ---
         const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
 
         function success(pos) {
@@ -211,25 +284,35 @@
             let speedKmh = (pos.coords.speed || 0) * 3.6;
             if (speedKmh < 0) speedKmh = 0;
 
-            // 状態更新
-            currentPos = [lat, lng];
+            const newPos = [lat, lng];
+
+            // 距離計算 (記録中のみ)
+            if (isRecording && prevPos) {
+                const d = getDistanceKm(prevPos[0], prevPos[1], lat, lng);
+                // 誤差によるブレを防ぐため、ごくわずかな移動(GPS揺らぎ等)は無視しても良いが
+                // ここでは単純に加算します。
+                totalDistance += d;
+                distTripEl.textContent = totalDistance.toFixed(2);
+            }
+
+            // 位置情報の更新
+            currentPos = newPos;
+            // 記録中は今回の位置を「前回の位置」として保存
+            if (isRecording) {
+                prevPos = newPos;
+                trackPath.push(currentPos);
+                trackLine.setLatLngs(trackPath);
+            }
+
             speedEl.textContent = speedKmh.toFixed(1);
             statusEl.textContent = `精度: ${Math.round(accuracy)}m`;
 
-            // マーカー更新 (記録中じゃなくても現在地は表示)
             if (!myMarker) {
                 myMarker = L.marker(currentPos).addTo(map);
             } else {
                 myMarker.setLatLng(currentPos);
             }
 
-            // 【重要】記録中のみ軌跡を追加
-            if (isRecording) {
-                trackPath.push(currentPos);
-                trackLine.setLatLngs(trackPath);
-            }
-
-            // 【重要】自動追従ONのときのみ地図を動かす
             if (isAutoCentering) {
                 map.panTo(currentPos);
             }
@@ -243,12 +326,12 @@
             navigator.geolocation.watchPosition(success, error, geoOptions);
         }
 
-        // --- 4. GPX読み込み ---
-        gpxInput.addEventListener('change', function(e) {
+        // --- GPX処理 ---
+        gpxInput.addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 parseGPX(e.target.result);
             };
             reader.readAsText(file);
@@ -256,32 +339,50 @@
 
         function parseGPX(gpxText) {
             if (plannedRouteLine) map.removeLayer(plannedRouteLine);
+
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(gpxText, "text/xml");
             const trkpts = xmlDoc.getElementsByTagName("trkpt");
             const routeCoords = [];
+
+            let routeDist = 0;
+
             for (let i = 0; i < trkpts.length; i++) {
-                routeCoords.push([parseFloat(trkpts[i].getAttribute("lat")), parseFloat(trkpts[i].getAttribute("lon"))]);
+                const lat = parseFloat(trkpts[i].getAttribute("lat"));
+                const lon = parseFloat(trkpts[i].getAttribute("lon"));
+                routeCoords.push([lat, lon]);
+
+                // コース距離の積算
+                if (i > 0) {
+                    routeDist += getDistanceKm(
+                        routeCoords[i - 1][0], routeCoords[i - 1][1],
+                        lat, lon
+                    );
+                }
             }
+
             if (routeCoords.length > 0) {
-                plannedRouteLine = L.polyline(routeCoords, {color: '#3388ff', weight: 6, opacity: 0.6}).addTo(map);
+                plannedRouteLine = L.polyline(routeCoords, { color: '#3388ff', weight: 6, opacity: 0.6 }).addTo(map);
                 map.fitBounds(plannedRouteLine.getBounds());
-                // GPX読み込み直後は全体を見たいはずなので、自動追従は一旦OFFにするのが親切かも（お好みで）
-                isAutoCentering = false; 
+
+                // コース距離を表示
+                distRouteEl.textContent = routeDist.toFixed(1);
+
+                isAutoCentering = false;
             } else {
-                alert("ルートが見つかりませんでした");
+                alert("ルートなし");
             }
         }
 
-        // --- 5. Wake Lock ---
+        // Wake Lock
         let wakeLock = null;
         async function requestWakeLock() {
-            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { }
         }
         document.addEventListener('click', requestWakeLock);
         requestWakeLock();
 
     </script>
 </body>
-</html>
 
+</html>
